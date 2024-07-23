@@ -6,8 +6,10 @@ from .DAQRunLogger import RunInfo
 
 
 class ECLDAQRunLogger:
-    """Posts run info to the E-Log. Some extra checks ensure we don't make
-    multiple posts."""
+    """Posts run info to the E-Log. This class checks to see that the run
+    number is greater than the previous to avoid making multiple or
+    out-of-order posts, so it is up to the caller to ensure the runs to log are
+    sorted."""
 
     def __init__(self, ecl_url):
         self._ecl_url = ecl_url
@@ -45,8 +47,8 @@ class ECLDAQRunLogger:
         # - if we are handling an old run, something's wrong, so don't post
         last_run = self._get_last_run() 
         if info.run_number == last_run.run_number:
+            # only post if this is an end-of-run message
             if info.end_time is not None and last_run.end_time is None:
-                # post an end-of-run message
                 self._post_run(info, end_of_run=True)
         elif info.run_number > last_run_number:
             # presumably a new run
@@ -55,7 +57,15 @@ class ECLDAQRunLogger:
                 last_run_end = last_run.copy()
                 last_run_end.end_time = info.start_time
                 self._post_run(last_run_end, end_of_run=True)
+        
             self._post_run(info)
+
+            # handle the corner-case where we are given a single completed run
+            # that is new but hasn't been logged at all. We can post the
+            # end-of-run entry for it too
+            if info.end_time is not None:
+                self._post_run(info, end_of_run=True)
+
         else:
             # probably bad input, don't post
             return
