@@ -5,11 +5,11 @@ from queue import Queue
 from threading import Thread
 from datetime import datetime
 
-from DAQRunLogger import RunInfo, DAQRunLogger
+from .daqrunlogger import RunInfo, DAQRunLogger
 
 
 
-class LoggerWorker(Thread):
+class DAQLoggerWorker(Thread):
     """Class to be assigned to a thread. Listens for RunInfo objects and calls
     its DAQRunLogger's log_run method when available."""
     def __init__(self, logger: DAQRunLogger, queue: Queue, timeout: int=1):
