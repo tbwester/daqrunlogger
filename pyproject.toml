@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools >= 61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daqrunlogger"
+version = "0.1"
+dependencies = [
+  "python-daemon",
+]
+requires-python = ">=3.8"
+description = "Lovely Spam! Wonderful !"
+readme = "README.md"
+
+[project.optional-dependencies]
+google = ["google-api-python-client", "google-auth-httplib2", "google-auth-oauthlib"]
+ecl = ["sbndprmdaq"]
