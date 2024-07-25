@@ -20,6 +20,9 @@ class DAQLoggerWorker(Thread):
         self._timeout = timeout
         self._stopped = False
 
+        # this thread will exit once the main thread does
+        self.daemon = True
+
     
     def stop(self):
         self._stopped = True
