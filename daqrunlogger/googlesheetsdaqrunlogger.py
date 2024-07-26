@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 
+import sys 
+import time
+from typing import Optional, List
+from datetime import datetime
+
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 
-from .DAQRunLogger import RunInfo
+from .daqrunlogger import RunInfo
 
 
 class GoogleSheetsDAQRunLogger:
@@ -15,8 +20,8 @@ class GoogleSheetsDAQRunLogger:
         'https://www.googleapis.com/auth/spreadsheets',
     ]
 
-    def __init__(self, spreadsheet_id: str, sheet_name: str, header: int=0, range_phrase: Optional[str]=None):
-        self._spreadsheet_id = spreadsheet_id
+    def __init__(self, sheet_id: str, sheet_name: str, credentials_filename: str, header: int=0, range_phrase: Optional[str]=None):
+        self._spreadsheet_id = sheet_id
         self._sheet_name = sheet_name
         self._header = header
 
@@ -26,10 +31,13 @@ class GoogleSheetsDAQRunLogger:
         # range_phrase: append method will look for a table starting with this cell
         self._range_phrase = f'{self._sheet_name}!{range_phrase}'
         self._last_post = datetime.fromtimestamp(0)
-        
+
         credentials = service_account.Credentials.from_service_account_file(
-            'credentials.json', scopes=GoogleSheetsDAQRunLogger.SCOPES)
+            credentials_filename, scopes=GoogleSheetsDAQRunLogger.SCOPES)
         self._service = build('sheets', 'v4', credentials=credentials)
+
+        # maintain a list of known completed runs so we can skip duplicates
+        self._run_cache = []
 
 
     def run_row_map(self):
@@ -55,13 +63,20 @@ class GoogleSheetsDAQRunLogger:
 
 
     def log_run(self, info: RunInfo) -> None:
-        # rate limit to 30 seconds between requests
-        now = datetime.now()
-        if (now - self._last_post).seconds < 30:
+        print(f'got run {info.run_number}', self._run_cache)
+        if info.run_number in self._run_cache:
+            print(f'skip run {info.run_number}, found in cache')
             return
 
+        # rate limit to 1 seconds between requests
+        now = datetime.now()
+        dt = (now - self._last_post).total_seconds()
+        if dt < 1:
+            time.sleep(1 - dt)
+        print(f'logging run {info.run_number}')
+
         date = info.start_time.strftime('%y/%m/%d')
-        time = info.start_time.strftime('%H:%M:%S')
+        time_ = info.start_time.strftime('%H:%M:%S')
 
         end_time = ''
         if info.end_time is not None:
@@ -70,7 +85,7 @@ class GoogleSheetsDAQRunLogger:
         body = {
             'values': [
                 [
-                    info.run_number, date, time, end_time, info.configuration,\
+                    info.run_number, date, time_, end_time, info.configuration,\
                     ', '.join(info.excluded_components), info.comments
                 ]
             ]
@@ -79,9 +94,10 @@ class GoogleSheetsDAQRunLogger:
         runs = self.run_row_map()
         row = None
         try:
-            row = runs[info.run_number]
+            row = runs[info.run_number] - 1
             print(f'Found row={row}')
         except KeyError:
+            print(f'Found new run, appending')
             pass
 
         if row is not None:
@@ -108,4 +124,6 @@ class GoogleSheetsDAQRunLogger:
             print('Warning: Unexpected result')
             print(result)
 
+        if info.end_time is not None:
+            self._run_cache.append(info.run_number) 
         self._last_post = now
