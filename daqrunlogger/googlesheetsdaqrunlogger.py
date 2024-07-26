@@ -2,6 +2,7 @@
 
 import sys 
 import time
+from collections import deque
 from typing import Optional, List
 from datetime import datetime
 
@@ -37,7 +38,8 @@ class GoogleSheetsDAQRunLogger:
         self._service = build('sheets', 'v4', credentials=credentials)
 
         # maintain a list of known completed runs so we can skip duplicates
-        self._run_cache = []
+        # deque so that cache never gets too big
+        self._run_cache = deque(maxlen=1000)
 
 
     def run_row_map(self):
@@ -86,7 +88,7 @@ class GoogleSheetsDAQRunLogger:
             'values': [
                 [
                     info.run_number, date, time_, end_time, info.configuration,\
-                    ', '.join(info.excluded_components), info.comments
+                    ', '.join(info.components), info.comments
                 ]
             ]
         }
