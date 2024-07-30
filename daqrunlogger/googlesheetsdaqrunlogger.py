@@ -2,6 +2,7 @@
 
 import sys 
 import time
+import string
 from collections import deque
 from typing import Optional, List
 from datetime import datetime
@@ -31,6 +32,8 @@ class GoogleSheetsDAQRunLogger:
 
         # range_phrase: append method will look for a table starting with this cell
         self._range_phrase = f'{self._sheet_name}!{range_phrase}'
+
+        self._api_wait_seconds = 10
         self._last_post = datetime.fromtimestamp(0)
 
         credentials = service_account.Credentials.from_service_account_file(
@@ -49,8 +52,12 @@ class GoogleSheetsDAQRunLogger:
         row_start = str(self._header) if self._header > 0 else ''
         range_name = f'{self._sheet_name}!A{row_start}:A'
 
-        result = self._service.spreadsheets().values().get(
-            spreadsheetId=self._spreadsheet_id, range=range_name).execute()
+        try:
+            result = self._service.spreadsheets().values().get(
+                spreadsheetId=self._spreadsheet_id, range=range_name).execute()
+        except (TimeoutError, HttpError):
+            return None
+
         rows = result.get('values', [])
         result = {}
 
@@ -65,7 +72,6 @@ class GoogleSheetsDAQRunLogger:
 
 
     def log_run(self, info: RunInfo) -> None:
-        print(f'got run {info.run_number}', self._run_cache)
         if info.run_number in self._run_cache:
             print(f'skip run {info.run_number}, found in cache')
             return
@@ -73,27 +79,38 @@ class GoogleSheetsDAQRunLogger:
         # rate limit to 1 seconds between requests
         now = datetime.now()
         dt = (now - self._last_post).total_seconds()
-        if dt < 1:
-            time.sleep(1 - dt)
+        if dt < self._api_wait_seconds:
+            time.sleep(self._api_wait_seconds - dt)
         print(f'logging run {info.run_number}')
 
         date = info.start_time.strftime('%y/%m/%d')
         time_ = info.start_time.strftime('%H:%M:%S')
 
+        runs = self.run_row_map()
+        if runs is None:
+            print('Error when accessing Google sheets API, retrying...')
+            return
+	
+        # End time: If properly set, run has concluded. If not, check if there
+	# are runs after this run. If so, maybe run was ended un-gracefully
         end_time = ''
         if info.end_time is not None:
             end_time = info.end_time.strftime('%H:%M:%S')
+        else:
+            if any(run > info.run_number for run in runs.keys()):
+                end_time = 'unknown'
 
+        # note: don't write comments since it may overwrite what the shifter
+        # has written
         body = {
             'values': [
                 [
                     info.run_number, date, time_, end_time, info.configuration,\
-                    ', '.join(info.components), info.comments
+                    ', '.join(info.components) #, info.comments
                 ]
             ]
         }
 
-        runs = self.run_row_map()
         row = None
         try:
             row = runs[info.run_number] - 1
@@ -102,14 +119,20 @@ class GoogleSheetsDAQRunLogger:
             print(f'Found new run, appending')
             pass
 
-        if row is not None:
-            result = self._service.spreadsheets().values().update(
-                spreadsheetId=self._spreadsheet_id, range=f'A{row}:Z{row}',
-                valueInputOption=GoogleSheetsDAQRunLogger.INPUT_OPTS, body=body).execute()
-        else:
-            result = self._service.spreadsheets().values().append(
-                spreadsheetId=self._spreadsheet_id, range=self._range_phrase,
-                valueInputOption=GoogleSheetsDAQRunLogger.INPUT_OPTS, body=body).execute()
+        # get the column name of the last column to update, e.g. column 0 is A, etc.
+        endcol = string.ascii_uppercase[len(body['values'][0]) - 1]
+        try:
+            if row is not None:
+                result = self._service.spreadsheets().values().update(
+                    spreadsheetId=self._spreadsheet_id, range=f'A{row}:{endcol}{row}',
+                    valueInputOption=GoogleSheetsDAQRunLogger.INPUT_OPTS, body=body).execute()
+            else:
+                result = self._service.spreadsheets().values().append(
+                    spreadsheetId=self._spreadsheet_id, range=self._range_phrase,
+                    valueInputOption=GoogleSheetsDAQRunLogger.INPUT_OPTS, body=body).execute()
+        except (HttpError, TimeoutError):
+            print('Error when accessing Google sheets API, retrying...')
+            return
 
         updated_cells = 0
 
@@ -126,6 +149,6 @@ class GoogleSheetsDAQRunLogger:
             print('Warning: Unexpected result')
             print(result)
 
-        if info.end_time is not None:
+        if end_time != '':
             self._run_cache.append(info.run_number) 
         self._last_post = now
