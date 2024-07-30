@@ -15,7 +15,7 @@ def main():
     # add loggers to the list
     # gslogger = GoogleSheetsDAQRunLogger('sheet id', 'sheet name', header=2)
     stdoutlogger = StdoutDAQRunLogger()
-    shelllogger = ShellDAQRunLogger('echo', ['run_number', 'start_time', 'doesn\'t exist'])
+    shelllogger = ShellDAQRunLogger('echo', ['run_number', 'start_time'])
     loggers = [stdoutlogger, shelllogger] #, gslogger]
 
     queues = []
