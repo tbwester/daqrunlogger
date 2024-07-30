@@ -6,8 +6,8 @@ try:
     from googleapiclient.discovery import build
     from google.oauth2 import service_account
     from .googlesheetsdaqrunlogger import GoogleSheetsDAQRunLogger
-except ImportError:
-    pass
+except ImportError as e:
+    print(f'Warning: Could not import some necessary Google libraries. {e}')
 
 try:
     from sbndprmdaq.eclapi import ECL
