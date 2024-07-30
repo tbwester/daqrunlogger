@@ -1,4 +1,5 @@
-from .daqrunlogger import DAQRunLogger, StdoutDAQRunLogger
+from .daqrunlogger import DAQRunLogger, StdoutDAQRunLogger, RunInfo
+from .shelldaqrunlogger import ShellDAQRunLogger
 from .daqloggerworker import DAQLoggerWorker
 
 try:
