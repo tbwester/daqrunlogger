@@ -15,8 +15,9 @@ class RunInfo:
     run_number: int
     start_time: datetime
     configuration: str
-    excluded_components: List[str] = field(default_factory=lambda: ['none'])
+    components: List[str] = field(default_factory=lambda: [])
     end_time: Optional[datetime] = None
+    version: Optional[str] = ''
     comments: Optional[str] = ''
 
 
