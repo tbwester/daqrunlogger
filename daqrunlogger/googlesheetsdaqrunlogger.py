@@ -7,6 +7,7 @@ from collections import deque
 from typing import Optional, List
 from datetime import datetime
 
+from googleapiclient.http import HttpError
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 
@@ -130,7 +131,7 @@ class GoogleSheetsDAQRunLogger:
                 result = self._service.spreadsheets().values().append(
                     spreadsheetId=self._spreadsheet_id, range=self._range_phrase,
                     valueInputOption=GoogleSheetsDAQRunLogger.INPUT_OPTS, body=body).execute()
-        except (HttpError, TimeoutError):
+        except (TimeoutError, HttpError):
             print('Error when accessing Google sheets API, retrying...')
             return
 
