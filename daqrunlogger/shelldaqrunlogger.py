@@ -28,6 +28,8 @@ class ShellDAQRunLogger:
                 args += [str(val) for val in attr]
             elif isinstance(attr, datetime):
                 args += [d for d in attr.strftime(self._date_format).split()]
+            elif attr is None:
+                args += ['']
             else:
                 args += [str(attr)]
 
