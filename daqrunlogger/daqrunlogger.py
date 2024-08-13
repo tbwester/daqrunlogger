@@ -19,6 +19,7 @@ class RunInfo:
     end_time: Optional[datetime] = None
     version: Optional[str] = ''
     comments: Optional[str] = ''
+    bad_end: Optional[bool] = False
 
 
 class DAQRunLogger(Protocol):

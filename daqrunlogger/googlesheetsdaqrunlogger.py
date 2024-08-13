@@ -84,8 +84,7 @@ class GoogleSheetsDAQRunLogger:
             time.sleep(self._api_wait_seconds - dt)
         print(f'logging run {info.run_number}')
 
-        date = info.start_time.strftime('%y/%m/%d')
-        time_ = info.start_time.strftime('%H:%M:%S')
+        start_time = info.start_time.strftime('%Y-%m-%d %H:%M:%S')
 
         runs = self.run_row_map()
         if runs is None:
@@ -96,18 +95,20 @@ class GoogleSheetsDAQRunLogger:
 	# are runs after this run. If so, maybe run was ended un-gracefully
         end_time = ''
         if info.end_time is not None:
-            end_time = info.end_time.strftime('%H:%M:%S')
+            end_time = info.end_time.strftime('%Y-%m-%d %H:%M:%S')
         else:
             if any(run > info.run_number for run in runs.keys()):
                 end_time = 'unknown'
+            else:
+                end_time = 'Running'
 
         # note: don't write comments since it may overwrite what the shifter
         # has written
         body = {
             'values': [
                 [
-                    info.run_number, date, time_, end_time, info.configuration,\
-                    ', '.join(info.components) #, info.comments
+                    info.run_number, start_time, end_time, info.configuration,\
+                    ', '.join(info.components), 'Yes' if info.bad_end else 'No'
                 ]
             ]
         }
@@ -150,6 +151,6 @@ class GoogleSheetsDAQRunLogger:
             print('Warning: Unexpected result')
             print(result)
 
-        if end_time != '':
+        if info.end_time is not None:
             self._run_cache.append(info.run_number) 
         self._last_post = now
