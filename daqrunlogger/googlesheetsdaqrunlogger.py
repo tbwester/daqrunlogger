@@ -5,7 +5,7 @@ import time
 import string
 from collections import deque
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from googleapiclient.http import HttpError
 from googleapiclient.discovery import build
@@ -100,7 +100,11 @@ class GoogleSheetsDAQRunLogger:
             if any(run > info.run_number for run in runs.keys()):
                 end_time = 'unknown'
             else:
-                end_time = 'Running'
+                runtime = int((datetime.now(timezone.utc) - info.start_time).total_seconds())
+                runtime_min = runtime // 60
+                runtime_sec = runtime % 60
+                end_time = f'Running ({runtime_min:02d}:{runtime_sec:02d})'
+                #end_time = 'Running'
 
         # note: don't write comments since it may overwrite what the shifter
         # has written

@@ -15,11 +15,12 @@ class RunInfo:
     run_number: int
     start_time: datetime
     configuration: str
+    metadata: str
     components: List[str] = field(default_factory=lambda: [])
     end_time: Optional[datetime] = None
-    version: Optional[str] = ''
-    comments: Optional[str] = ''
-    bad_end: Optional[bool] = False
+    version: Optional[str] = None
+    comments: Optional[str] = None
+    bad_end: bool = False
 
 
 class DAQRunLogger(Protocol):

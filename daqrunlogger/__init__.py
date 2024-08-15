@@ -12,5 +12,5 @@ except ImportError as e:
 try:
     from sbndprmdaq.eclapi import ECL
     from .ecldaqrunlogger import ECLDAQRunLogger
-except ImportError:
-    pass
+except ImportError as e:
+    print(f'Warning: Could not import ECL libraries. {e}')
