@@ -21,10 +21,14 @@ class RunInfo:
     version: Optional[str] = None
     comments: Optional[str] = None
     bad_end: bool = False
+    dev_run: bool = False
 
 
 class DAQRunLogger(Protocol):
+    """Methods for loggers to implement."""
     def log_run(self, info: RunInfo) -> None: ...
+
+    def filter_run(self, info: RunInfo) -> bool: ...
 
 
 class StdoutDAQRunLogger:

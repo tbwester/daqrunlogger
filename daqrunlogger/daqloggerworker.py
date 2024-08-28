@@ -34,6 +34,10 @@ class DAQLoggerWorker(Thread):
                 continue
 
             info = self._queue.get()
+            if not self._logger.filter_run(info):
+                self._queue.task_done()
+                continue
+
             self._logger.log_run(info)
             self._queue.task_done()
 

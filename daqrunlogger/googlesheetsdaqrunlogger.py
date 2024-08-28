@@ -45,7 +45,6 @@ class GoogleSheetsDAQRunLogger:
         # deque so that cache never gets too big
         self._run_cache = deque(maxlen=1000)
 
-
     def run_row_map(self):
         """Gets valid run numbers from the first column of the spreadsheet. If
         the run appears multiple times, the last row it appears will be
@@ -71,6 +70,13 @@ class GoogleSheetsDAQRunLogger:
 
         return result
 
+
+    def filter_run(self, info: RunInfo) -> bool:
+        """Only post shifter runs to the sheet."""
+        if info.dev_run:
+            print(f'skip run {info.run_number}, started from dev area')
+            return False
+        return True
 
     def log_run(self, info: RunInfo) -> None:
         if info.run_number in self._run_cache:
