@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
+from collections import deque
 
 from .daqrunlogger import RunInfo
 
@@ -18,6 +19,12 @@ class ShellDAQRunLogger:
         if forward_attrs is not None:
             self._forward_attrs = forward_attrs
         self._date_format = date_format
+        self._last_return_code = None
+
+
+    def filter_run(self, info: RunInfo) -> bool:
+        """Accept any run."""
+        return True
 
 
     def log_run(self, info: RunInfo) -> None:
@@ -33,7 +40,61 @@ class ShellDAQRunLogger:
             else:
                 args += [str(attr)]
 
-        subprocess.run(args)
+        result = subprocess.run(args)
+        self._last_return_code = result.returncode
+
+
+class OnStartDAQRunLogger(ShellDAQRunLogger):
+    """Only accept runs with start times within the last N seconds, then hang
+    on to the run until it's processed."""
+
+    def __init__(self, shell_cmd: str, forward_attrs: Optional[List[str]]=None, date_format: str='%Y-%m-%d %H:%M:%S', max_delay: int=60):
+        super().__init__(shell_cmd, forward_attrs, date_format)
+        self.max_delay = 60
+        self.current_run = None
+        self.cache = deque(maxlen=1000)
+
+    def filter_run(self, info: RunInfo) -> bool:
+        # we've already processed this run
+        if info.run_number in self.cache:
+            print(f'Skipping known run {info.run_number}')
+            return False
+
+        # a completed run. If it's our current one but we haven't processed it
+        # yet, process it but also cache it so we don't re-run it
+        if info.end_time is not None:
+            if self.current_run is not None:
+                if info.run_number == self.current_run.run_number and not info.run_number in self.cache:
+                    self.cache.append(info.run_number)
+                    self.current_run = None
+                    return True
+
+            print(f'Skipping completed run {info.run_number}')
+            return False
+
+        # ongoing run & its the current one, let's process it
+        if self.current_run is not None:
+            if info.run_number == self.current_run.run_number:
+                return True
+
+        # ongoing run & it's not the current one? Could be bad info. Let's check dt
+        now = datetime.now(timezone.utc)
+        dt = (now - info.start_time).total_seconds()
+        if dt > self.max_delay:
+            print(f'Skipping incomplete run {info.run_number}, started more than {self.max_delay} seconds ago.')
+            return False
+
+        # Must be a new run & we missed the end time of our current one. Reset
+        # for the new one
+        self.current_run = info
+        return True
+
+    def log_run(self, info: RunInfo) -> None:
+        print(f'Processing ongoing run {info.run_number}')
+        super().log_run(info)
+        if self._last_return_code == 0:
+            self.cache.append(info.run_number)
+            self.current_run = None
 
 
 if __name__ == '__main__':
