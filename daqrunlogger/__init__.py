@@ -10,7 +10,7 @@ except ImportError as e:
     print(f'Warning: Could not import some necessary Google libraries. {e}')
 
 try:
-    from sbndprmdaq.eclapi import ECL
+    from ecl_api import ECL
     from .ecldaqrunlogger import ECLDAQRunLogger
 except ImportError as e:
     print(f'Warning: Could not import ECL libraries. {e}')

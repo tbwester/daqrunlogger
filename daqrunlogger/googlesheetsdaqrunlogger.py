@@ -13,6 +13,9 @@ from google.oauth2 import service_account
 
 from .daqrunlogger import RunInfo
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class GoogleSheetsDAQRunLogger:
     """Adds run info to a Google sheet. Assumes column 'A' contains run numbers
@@ -66,7 +69,7 @@ class GoogleSheetsDAQRunLogger:
                 result[int(row[0])] = self._header + i + 1
             except (ValueError, IndexError):
                 # apply header offset to get correct row
-                print(f'Warning: Invalid run number "{row}" at row={self._header + i}.')
+                logger.warn(f'Warning: Invalid run number "{row}" at row={self._header + i}.')
 
         return result
 
@@ -74,27 +77,29 @@ class GoogleSheetsDAQRunLogger:
     def filter_run(self, info: RunInfo) -> bool:
         """Only post shifter runs to the sheet."""
         if info.dev_run:
-            print(f'skip run {info.run_number}, started from dev area')
+            logger.info(f'skip run {info.run_number}, started from dev area')
             return False
+
+        if info.run_number in self._run_cache:
+            logger.info(f'skip run {info.run_number}, found in cache')
+            return False
+
         return True
 
     def log_run(self, info: RunInfo) -> None:
-        if info.run_number in self._run_cache:
-            print(f'skip run {info.run_number}, found in cache')
-            return
 
         # rate limit to 1 seconds between requests
         now = datetime.now()
         dt = (now - self._last_post).total_seconds()
         if dt < self._api_wait_seconds:
             time.sleep(self._api_wait_seconds - dt)
-        print(f'logging run {info.run_number}')
+        logger.info(f'logging run {info.run_number}')
 
         start_time = info.start_time.strftime('%Y-%m-%d %H:%M:%S')
 
         runs = self.run_row_map()
         if runs is None:
-            print('Error when accessing Google sheets API, retrying...')
+            logger.warn('Error when accessing Google sheets API, retrying...')
             return
 	
         # End time: If properly set, run has concluded. If not, check if there
@@ -126,9 +131,9 @@ class GoogleSheetsDAQRunLogger:
         row = None
         try:
             row = runs[info.run_number] - 1
-            print(f'Found row={row}')
+            logger.debug(f'Found row={row}')
         except KeyError:
-            print(f'Found new run, appending')
+            logger.debug(f'Found new run, appending')
             pass
 
         # get the column name of the last column to update, e.g. column 0 is A, etc.
@@ -143,7 +148,7 @@ class GoogleSheetsDAQRunLogger:
                     spreadsheetId=self._spreadsheet_id, range=self._range_phrase,
                     valueInputOption=GoogleSheetsDAQRunLogger.INPUT_OPTS, body=body).execute()
         except (TimeoutError, HttpError):
-            print('Error when accessing Google sheets API, retrying...')
+            logger.warn('Error when accessing Google sheets API, retrying...')
             return
 
         updated_cells = 0
@@ -158,8 +163,7 @@ class GoogleSheetsDAQRunLogger:
                 pass
 
         if updated_cells == 0:
-            print('Warning: Unexpected result')
-            print(result)
+            logger.warn(f'Warning: Unexpected result {result}')
 
         if info.end_time is not None:
             self._run_cache.append(info.run_number) 

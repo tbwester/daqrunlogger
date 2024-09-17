@@ -48,14 +48,18 @@ class OnStartDAQRunLogger(ShellDAQRunLogger):
     """Only accept runs with start times within the last N seconds, then hang
     on to the run until it's processed."""
 
-    def __init__(self, shell_cmd: str, forward_attrs: Optional[List[str]]=None, date_format: str='%Y-%m-%d %H:%M:%S', max_delay: int=60):
+    def __init__(self, shell_cmd: str, forward_attrs: Optional[List[str]]=None, date_format: str='%Y-%m-%d %H:%M:%S', max_delay: int=60*60*24):
         super().__init__(shell_cmd, forward_attrs, date_format)
-        self.max_delay = 60
+        self.max_delay = max_delay
         self.current_run = None
         self.cache = deque(maxlen=1000)
 
     def filter_run(self, info: RunInfo) -> bool:
         # we've already processed this run
+        if info.dev_run:
+            print(f'skip run {info.run_number}, started from dev area')
+            return False
+
         if info.run_number in self.cache:
             print(f'Skipping known run {info.run_number}')
             return False
@@ -74,18 +78,26 @@ class OnStartDAQRunLogger(ShellDAQRunLogger):
 
         # ongoing run & its the current one, let's process it
         if self.current_run is not None:
-            if info.run_number == self.current_run.run_number:
-                return True
+            if info.run_number < self.current_run.run_number:
+                # an old run missing an end time
+                return False
 
-        # ongoing run & it's not the current one? Could be bad info. Let's check dt
+            if info.run_number > self.current_run.run_number:
+                # Must be a new run & we missed the end time of our current one. Reset
+                # for the new one
+                self.current_run = info
+
+            return True
+
+        # we don't have a run so this could be the current one
+        # let's do a sanity check that it isn't >1 day old
         now = datetime.now(timezone.utc)
         dt = (now - info.start_time).total_seconds()
         if dt > self.max_delay:
             print(f'Skipping incomplete run {info.run_number}, started more than {self.max_delay} seconds ago.')
             return False
-
-        # Must be a new run & we missed the end time of our current one. Reset
-        # for the new one
+        
+        # ok, seems plausible
         self.current_run = info
         return True
 
