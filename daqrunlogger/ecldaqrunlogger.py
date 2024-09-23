@@ -4,7 +4,7 @@ import time
 import dataclasses
 
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from collections import deque
 import xml.etree.ElementTree as ET
 
@@ -35,7 +35,6 @@ class ECLDAQRunLogger:
         self._ecl_service = ECL(url=self._ecl_url, user=username, password=password)
 
         self._current_run = None
-        self._last_start_ecl_entry_number = None
         self._run_cache = deque(maxlen=1000)
         self.start_time_utc = datetime.now(tz=timezone.utc)
 
@@ -44,52 +43,42 @@ class ECLDAQRunLogger:
     def run_info_from_ecl_entry(entry):
         """
         Create a runinfo object from an ECL XML entry.
-        Note the object returned here is used internally for run number and
-        time comparisons; we don't try to extract other all fields.
+        Note the object returned here is used internally for run number
+        comparisons; we don't try to extract other all fields.
         """
-        run_number = ...
-        end_time = None
-        if entry.attrib['form'] == ECLDAQRunLogger.ECL_START_FORM:
-            # get the start time from the current form
-            pass
-        elif entry.attrib['form'] == ECLDAQRunLogger.ECL_END_FORM:
-            # get the end time from the current form
-            # try to get the start time from the reference entry
-            pass
-        else:
+        if entry.attrib['form'] not in [ECLDAQRunLogger.ECL_START_FORM, ECLDAQRunLogger.ECL_END_FORM]:
             raise ValueError(f'Entry did not correspond to form of type "{ECLDAQRunLogger.ECL_START_FORM}" or "{ECLDAQRunLogger.ECL_END_FORM}".')
 
-        return RunInfo(run_number, start_time=start_time,
-                configuration='', metadata='', end_time=end_time)
+        now = datetime.now(tz=timezone.utc)
+        body = entry.find('./text-html')
+        table = ET.fromstring(body.text)
+        run_number = int(table.find('./tr/td/pre').text)
 
-    def _get_last_run_number(self) -> Optional[RunInfo]:
-        """Search the ECL for the last post made by this class. If found, get the
-        info back as a RunInfo object."""
+        return RunInfo(run_number, start_time=now,
+                configuration='', metadata='', end_time=None)
 
-        return None
+    def _get_start_post_for_run(self, run_number) -> Optional[RunInfo]:
+        """Return the ECL entry number for a start-of-run post made by this class."""
 
-        # response = self._ecl_service.search(category=ECLDAQLogger.ECL_CATEGORY, limit=20)
-        response = self._ecl_service.search(limit=20)
+        response = self._ecl_service.search(category=ECLDAQRunLogger.ECL_CATEGORY, limit=20)
         xml = ET.fromstring(response)
         entries = xml.findall('./entry')
-        # entries = [e for e in entries if e.attrib['form'] in \
-        #     [ECLDAQRunLogger.ECL_START_FORM, ECLDAQRunLogger.ECL_END_FORM]]
+        entries = [e for e in entries if e.attrib['form'] == ECLDAQRunLogger.ECL_START_FORM]
+
         if not entries:
             return None
 
-        last_entry = next(reversed(sorted(entries, \
-            key=lambda x: datetime.strptime(x.attrib['timestamp'], '%m/%d/%Y %H:%M:%S'))))
+        for e in entries:
+            info = ECLDAQRunLogger.run_info_from_ecl_entry(e)
+            if info.run_number == run_number:
+                return e.attrib['id']
 
-        last_run = ECLDAQRunLogger.run_info_from_ecl_entry(last_entry)
-        if entry.attrib['formname'] == ECLDAQRunLogger.ECL_START_FORM:
-            self._last_start_ecl_entry_number = last_entry.attrib['id'] 
-        return self._last_run_number
+        return None
 
 
     def _post_run(self, info: RunInfo, end_of_run: bool=False) -> None:
         """Make the post to the ECL."""
         logger.info(f'Writing run {info.run_number} to the ECL! {end_of_run=}')
-        return
 
         form_name = ECLDAQRunLogger.ECL_START_FORM if not end_of_run \
             else ECLDAQRunLogger.ECL_END_FORM
@@ -98,8 +87,10 @@ class ECLDAQRunLogger:
                 'category': ECLDAQRunLogger.ECL_CATEGORY,
                 'formname': form_name
         }
-        if end_of_run:
-            kwargs['related_entry'] = self._last_start_ecl_entry_number
+
+        start_ecl_entry_number = self._get_start_post_for_run(info.run_number)
+        if end_of_run and start_ecl_entry_number is not None:
+            kwargs['related_entry'] = start_ecl_entry_number
 
         entry = ECLEntry(**kwargs)
 
@@ -113,14 +104,19 @@ class ECLDAQRunLogger:
         if not end_of_run:
             fields['start_time'] = time_str
             fields['configuration'] = info.configuration
-            fields['components'] = ', '.join(info.components)
+            fields['included_components'] = '\n'.join(info.components)
             fields['metadata'] = info.metadata
         else:
             fields['end_time'] = time_str
             fields['crashed'] = 'Yes' if info.bad_end else 'No'
+            total_seconds = (info.end_time - info.start_time).total_seconds()
+            fields['duration'] = str(timedelta(seconds=total_seconds))
 
         for key, value in fields.items():
             entry.set_value(key, value)
+
+        logger.info(entry.show().strip()[1:])
+        self._ecl_service.post(entry, do_post=True)
 
 
     def filter_run(self, info: RunInfo) -> bool:
@@ -158,17 +154,11 @@ class ECLDAQRunLogger:
         #   If not, post an end-of-run update for that run first
         # - if we are handling an old run, something's wrong, so don't post
 
-        # first time start up: Check ECL for a previous run
-        # if we don't find anything, treat this run as the first
+        # first time start up, treat this run as the first
         # note: currently running run does not get a start-of-run entry
         if self._current_run is None:
-            self._current_run = self._get_last_run_number()
-            if self._current_run is None:
-                logger.info(f'setting run {info.run_number} as the current run')
-                self._current_run = info
-            else:
-                logger.info(f'found run {self._current_run.run_number} from ECL')
-
+            logger.info(f'setting run {info.run_number} as the current run')
+            self._current_run = info
             return
 
         if info.run_number < self._current_run.run_number:

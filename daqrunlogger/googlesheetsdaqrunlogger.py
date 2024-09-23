@@ -93,7 +93,7 @@ class GoogleSheetsDAQRunLogger:
         dt = (now - self._last_post).total_seconds()
         if dt < self._api_wait_seconds:
             time.sleep(self._api_wait_seconds - dt)
-        logger.info(f'logging run {info.run_number}')
+        logger.info(f'handling run {info.run_number}')
 
         start_time = info.start_time.strftime('%Y-%m-%d %H:%M:%S')
 

@@ -7,9 +7,10 @@ name = "daqrunlogger"
 version = "0.1"
 dependencies = [
   "python-daemon",
+  "ecl-api",
 ]
 requires-python = ">=3.8"
-description = "Lovely Spam! Wonderful !"
+description = ""
 readme = "README.md"
 
 [project.optional-dependencies]
