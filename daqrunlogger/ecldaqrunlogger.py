@@ -50,9 +50,13 @@ class ECLDAQRunLogger:
             raise ValueError(f'Entry did not correspond to form of type "{ECLDAQRunLogger.ECL_START_FORM}" or "{ECLDAQRunLogger.ECL_END_FORM}".')
 
         now = datetime.now(tz=timezone.utc)
-        body = entry.find('./text-html')
-        table = ET.fromstring(body.text)
-        run_number = int(table.find('./tr/td/pre').text)
+        try:
+            body = entry.find('./text-html')
+            table = ET.fromstring(body.text)
+            run_number = int(table.find('./tr/td/pre').text)
+        except Exception as e:
+            logger.exception(e)
+            return None
 
         return RunInfo(run_number, start_time=now,
                 configuration='', metadata='', end_time=None)
@@ -70,6 +74,10 @@ class ECLDAQRunLogger:
 
         for e in entries:
             info = ECLDAQRunLogger.run_info_from_ecl_entry(e)
+            if info is None:
+                logger.warn(f'Could not parse entry {e}')
+                continue
+
             if info.run_number == run_number:
                 return e.attrib['id']
 

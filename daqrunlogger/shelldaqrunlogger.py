@@ -57,11 +57,11 @@ class OnStartDAQRunLogger(ShellDAQRunLogger):
     def filter_run(self, info: RunInfo) -> bool:
         # we've already processed this run
         if info.dev_run:
-            print(f'skip run {info.run_number}, started from dev area')
+            # print(f'skip run {info.run_number}, started from dev area')
             return False
 
         if info.run_number in self.cache:
-            print(f'Skipping known run {info.run_number}')
+            # print(f'Skipping known run {info.run_number}')
             return False
 
         # a completed run. If it's our current one but we haven't processed it
@@ -73,7 +73,7 @@ class OnStartDAQRunLogger(ShellDAQRunLogger):
                     self.current_run = None
                     return True
 
-            print(f'Skipping completed run {info.run_number}')
+            # print(f'Skipping completed run {info.run_number}')
             return False
 
         # ongoing run & its the current one, let's process it
@@ -94,7 +94,7 @@ class OnStartDAQRunLogger(ShellDAQRunLogger):
         now = datetime.now(timezone.utc)
         dt = (now - info.start_time).total_seconds()
         if dt > self.max_delay:
-            print(f'Skipping incomplete run {info.run_number}, started more than {self.max_delay} seconds ago.')
+            # print(f'Skipping incomplete run {info.run_number}, started more than {self.max_delay} seconds ago.')
             return False
         
         # ok, seems plausible
@@ -102,9 +102,9 @@ class OnStartDAQRunLogger(ShellDAQRunLogger):
         return True
 
     def log_run(self, info: RunInfo) -> None:
-        print(f'Processing ongoing run {info.run_number}')
         super().log_run(info)
         if self._last_return_code == 0:
+            print(f'Shell logger completed ongoing run {info.run_number}')
             self.cache.append(info.run_number)
             self.current_run = None
 

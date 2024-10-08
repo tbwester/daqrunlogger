@@ -7,7 +7,6 @@ name = "daqrunlogger"
 version = "0.1"
 dependencies = [
   "python-daemon",
-  "ecl-api",
 ]
 requires-python = ">=3.8"
 description = ""
@@ -15,4 +14,4 @@ readme = "README.md"
 
 [project.optional-dependencies]
 google = ["google-api-python-client", "google-auth-httplib2", "google-auth-oauthlib"]
-ecl = ["sbndprmdaq"]
+ecl = ["ecl-api"]
