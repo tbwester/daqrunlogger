@@ -3,6 +3,7 @@
 import sys 
 import time
 import string
+import ssl
 from collections import deque
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -58,7 +59,7 @@ class GoogleSheetsDAQRunLogger:
         try:
             result = self._service.spreadsheets().values().get(
                 spreadsheetId=self._spreadsheet_id, range=range_name).execute()
-        except (TimeoutError, HttpError):
+        except (TimeoutError, HttpError, ssl.SSLEOFError):
             return None
 
         rows = result.get('values', [])
@@ -147,7 +148,7 @@ class GoogleSheetsDAQRunLogger:
                 result = self._service.spreadsheets().values().append(
                     spreadsheetId=self._spreadsheet_id, range=self._range_phrase,
                     valueInputOption=GoogleSheetsDAQRunLogger.INPUT_OPTS, body=body).execute()
-        except (TimeoutError, HttpError):
+        except (TimeoutError, HttpError, ssl.SSLEOFError):
             logger.warn('Error when accessing Google sheets API, retrying...')
             return
 
