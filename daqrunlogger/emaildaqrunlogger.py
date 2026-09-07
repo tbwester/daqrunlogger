@@ -18,9 +18,10 @@ class EmailDAQRunLogger:
         self._sender = sender
         self._recipients = recipients
         self._smtp_host = smtp_host
+        self._run_cache = deque(maxlen=1000)
 
     def filter_run(self, info: RunInfo) -> bool:
-        return info.end_time is not None
+        return info.end_time is not None and info.run_number not in self._run_cache
 
     def log_run(self, info: RunInfo) -> None:
         message = MIMEMultipart()
@@ -44,4 +45,6 @@ class EmailDAQRunLogger:
             )
         finally:
             smtp.quit()
+
+        self._run_cache.append(info.run_number)
 
