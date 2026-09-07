@@ -1,6 +1,7 @@
 from .daqrunlogger import DAQRunLogger, StdoutDAQRunLogger, RunInfo
 from .shelldaqrunlogger import ShellDAQRunLogger, OnStartDAQRunLogger
 from .daqloggerworker import DAQLoggerWorker
+from .emaildaqrunlogger import EmailDAQRunLogger
 
 try:
     from googleapiclient.discovery import build
