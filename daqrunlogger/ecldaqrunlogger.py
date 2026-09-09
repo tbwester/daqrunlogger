@@ -32,7 +32,7 @@ class ECLDAQRunLogger:
 
         with open(password_file, 'r') as f:
             password = f.readlines()[0].strip()
-        self._ecl_service = ECL(url=self._ecl_url, user=username, password=password)
+        self._ecl_service = ECL(url=self._ecl_url, user=username, password=password, debug=True)
 
         self._current_run = None
         self._run_cache = deque(maxlen=1000)
@@ -104,7 +104,10 @@ class ECLDAQRunLogger:
 
         time_str = info.start_time.strftime('%Y-%m-%d %H:%M:%S')
         if end_of_run:
-            time_str = info.end_time.strftime('%Y-%m-%d %H:%M:%S')
+            if info.end_time is not None:
+                time_str = info.end_time.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                time_str = 'Unknown'
         
         fields = {
             'number': str(info.run_number),
@@ -117,8 +120,11 @@ class ECLDAQRunLogger:
         else:
             fields['end_time'] = time_str
             fields['crashed'] = 'Yes' if info.bad_end else 'No'
-            total_seconds = (info.end_time - info.start_time).total_seconds()
-            fields['duration'] = str(timedelta(seconds=total_seconds))
+            if info.end_time is not None:
+                total_seconds = (info.end_time - info.start_time).total_seconds()
+                fields['duration'] = str(timedelta(seconds=total_seconds))
+            else:
+                fields['duration'] = 'Unknown'
 
         for key, value in fields.items():
             entry.set_value(key, value)
