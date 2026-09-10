@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+
+import redis
+import json
+from datetime import datetime, timezone
+from .daqrunlogger import RunInfo, DAQRunLogger
+
+class RedisDAQRunLogger:
+    """
+    A class for logging the status of the DAQ to a Redis stream. This
+    stream is intended to be used by the SBND Online Monitoring website
+    to set an audible alarm in the case that the DAQ has no active run.
+
+    Attributes
+    ----------
+    _redis : redis.Redis
+        The Redis client used to write to the stream.
+    _stream_name : str
+        The name of the stream to write to.
+    _latest_run_number : int
+        The run number of the latest run seen by the logger.
+
+    Methods
+    -------
+    filter_run(info: RunInfo) -> bool
+        Provides a run-level filter for the logger.
+    log_run(info: RunInfo) -> None
+        Logs information about the current run to Redis.
+    """
+    def __init__(self, redis_host: str = 'localhost',
+                 redis_port: int = 6379,
+                 password: str = None,
+                 stream_name: str = 'daq_run_status'):
+        self._redis = redis.Redis(host=redis_host, port=redis_port,
+                                  decode_responses=True, password=password)
+        self._stream_name = stream_name
+        self._latest_run_number = None
+
+    def filter_run(self, info: RunInfo) -> bool:
+        """
+        Provides a run-level filter for the loggger. This particular
+        logger only logs the status of the latest (current or last
+        stopped) run. This is enforced by keeping a record of the
+        latest run number and filtering out any run with a number
+        less than that.
+
+        Parameters
+        ----------
+        info : RunInfo
+            The run information to be logged.
+
+        Returns
+        -------
+        bool
+            True if the run should be logged, False otherwise.
+        """
+        if self._latest_run_number is None or info.run_number > self._latest_run_number:
+            self._latest_run_number = info.run_number
+        
+        return info.run_number == self._latest_run_number
+
+    def log_run(self, info: RunInfo) -> None:
+        """
+        Logs information about the current run to Redis. The logged
+        information includes the run number, DAQ configuration, start
+        time of the run, duration of the run, and the status of the run
+        (running or stopped). The duration is calculated as the time
+        elapsed since the start of the run (if actively running) or the
+        time elapsed between the start and end of the run (if stopped).
+
+        Parameters
+        ----------
+        info : RunInfo
+            The information belonging to the run to be logged.
+
+        Returns
+        -------
+        None.
+        """
+        if info.end_time is None:
+            status = "running"
+            runtime = int((datetime.now(timezone.utc) - info.start_time).total_seconds())
+        else:
+            status = "stopped"
+            runtime = int((info.end_time - info.start_time).total_seconds())
+
+        days = runtime // (24 * 3600)
+        runtime %= (24 * 3600)
+        hours = runtime // 3600
+        runtime %= 3600
+        minutes = runtime // 60
+        seconds = runtime % 60
+        duration = f'{days:02d}d {hours:02d}h {minutes:02d}m {seconds:02d}s'
+
+        data = {
+            "run_number": info.run_number,
+            "configuration": info.configuration,
+            "start_time": info.start_time.strftime('%Y-%m-%d %H:%M:%S'),
+            "duration": duration,
+            "status": status
+        }
+        if info.run_number == self._latest_run_number:
+            try:
+                self._redis.xadd(self._stream_name, data,  maxlen=1, approximate=False)
+            except redis.RedisError as e:
+                print(f"Error writing to Redis: {e}")

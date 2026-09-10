@@ -1,8 +1,10 @@
 # logger to send email to shifter slack channel once DAQ run ends
 
 import smtplib
+from collections import deque
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from datetime import datetime, timezone, timedelta
 
 from .daqrunlogger import RunInfo
 
@@ -19,11 +21,20 @@ class EmailDAQRunLogger:
         self._recipients = recipients
         self._smtp_host = smtp_host
         self._run_cache = deque(maxlen=1000)
+        self._start_time_utc = datetime.now(tz=timezone.utc)
 
     def filter_run(self, info: RunInfo) -> bool:
+
         return info.end_time is not None and info.run_number not in self._run_cache
 
     def log_run(self, info: RunInfo) -> None:
+
+        # check end time is not before logger start time
+        # otherwise old run, cache
+        if info.end_time < self._start_time_utc:
+            self._run_cache.append(info.run_number)
+            return
+
         message = MIMEMultipart()
         message["From"] = self._sender
         message["To"] = self._recipients
